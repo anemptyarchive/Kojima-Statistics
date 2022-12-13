@@ -55,8 +55,11 @@ min_x <- min(data_x)
 max_x <- max(data_x)
 min_x; max_x
 
-# 階級を指定
-class_vec <- seq(from = floor(min_x/10)*10, to = ceiling(max_x/10)*10, by = 5)
+# 階級の幅を指定
+class_width <- 5
+
+# 階級用の値を作成
+class_vec <- seq(from = floor(min_x/10)*10, to = ceiling(max_x/10)*10, by = class_width)
 class_vec
 
 # 度数分布表を作成:(連続値)
@@ -96,7 +99,7 @@ freq_df
 # ヒストグラムを作成
 ggplot() + 
   geom_bar(data = freq_df, mapping = aes(x = class_value, y = freq), 
-           stat = "identity", fill = "#00A968") + # 棒グラフ
+           stat = "identity", width = class_width, fill = "#00A968") + # 棒グラフ
   scale_x_continuous(breaks = freq_df[["class_value"]]) + # x軸
   labs(title = "Histogram", 
        x = "class value", y = "frequency")
@@ -118,5 +121,61 @@ ggplot() +
   scale_x_continuous(breaks = class_vals) + # x軸
   labs(title = "Histogram", 
        x = "class value", y = "frequency")
+
+
+# おまけ：階級とヒストグラムの関係 ---------------------------------------------------------------------
+
+# 画像の保存先を指定
+dir_path <- "tmp_folder"
+
+# 階級幅の最大値(フレーム数)を指定
+class_width_max <- 30
+
+# 階級を変更して作図
+for(i in 1:class_width_max) {
+  # 階級用の値を作成
+  class_vec <- seq(from = floor(min_x/10)*10, to = ceiling(max_x/10)*10, by = i)
+  
+  # 階級が1つの場合は再設定
+  if(length(class_vec) == 2) {
+    class_vec <- c(class_vec, class_vec[2]+i)
+  } else if(length(class_vec) == 1) {
+    break
+  }
+  
+  # 階級値を計算
+  class_vals <- cbind(class_vec[-1]+1, class_vec[-length(class_vec)]) |> 
+    apply(1, median)
+  
+  # ヒストグラムを作成
+  g <- ggplot() + 
+    geom_histogram(data = data_df, mapping = aes(x = x), 
+                   breaks = class_vec, fill = "#00A968") + # ヒストグラム
+    scale_x_continuous(breaks = class_vals) + # x軸
+    coord_cartesian(xlim = c(min(data_x), max(data_x)), 
+                    ylim = c(0, length(data_x))) + # 表示範囲
+    labs(title = "Histogram", 
+         x = "class value", y = "frequency")
+  
+  # グラフを書き出し
+  file_name <- stringr::str_pad(i, width = 2, side = "left", pad = 0)
+  ggplot2::ggsave(
+    filename = paste0(dir_path, "/", file_name, ".png"), plot = g, 
+    width = 800, height = 600, units = "px", dpi = 100
+  )
+}
+
+# ファイルパスを作成
+file_path_vec <- dir_path |> 
+  list.files() |> # ファイル名を取得
+  (\(.){paste0(dir_path, "/", .)})()
+
+# gif画像を作成
+gif_data <- file_path_vec |> 
+  magick::image_read() |> # 画像ファイルを読み込み
+  magick::image_animate(fps = 2, dispose = "previous")
+
+# gif画像を書き出し
+magick::image_write_gif(image = gif_data, path = "figure/ch01_histgram.gif", delay = 1/2)
 
 
