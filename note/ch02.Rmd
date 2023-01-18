@@ -1,0 +1,526 @@
+---
+title: "『完全独習 統計学入門』"
+author: "@anemptyarchive\\thanks{\\url{https://www.anarchive-beta.com/}}"
+date: "`r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
+output: 
+  html_document: 
+    toc: TRUE       # 目次
+    toc_depth: 3    # 目次の見出しレベル
+    toc_float: TRUE # 目次のスクロール追跡
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+----
+
+【編集履歴】
+
+- 2022.12.14：初稿完成
+- 2023.01.18：geom_histgramの処理ミスを修正
+
+-----
+
+
+# 第2項 平均値とはやじろべえの支点である――平均値の役割と捉え方
+
+　平均値の2通りの計算方法と、ヒストグラムとの関係を確認します。\
+\
+
+　利用するパッケージを読み込みます。
+
+```{r, eval=FALSE}
+# 利用パッケージ
+library(tidyverse)
+library(magick)
+```
+
+```{r, echo=FALSE}
+### 資料作成用:(チェック用)
+
+# チェック用
+library(ggplot2)
+```
+
+　この記事では、基本的に`パッケージ名::関数名()`の記法を使うので、パッケージを読み込む必要はありません。ただし、作図コードがごちゃごちゃしないようにパッケージ名を省略しているため`ggplot2`を読み込む必要があります。\
+　また、ネイティブパイプ演算子`|>`を使っています。`magrittr`パッケージのパイプ演算子`%>%`に置き換えても処理できますが、その場合は`magrittr`も読み込む必要があります。\
+\
+
+
+## 2-2 平均値とは
+
+　データの読み込みと、標本平均の計算式を確認します。\
+\
+
+　図表1-1のデータセットをベクトルとして作成します。
+
+```{r}
+# データを作成:(身長)
+data_x <- c(
+  151, 154, 158, 162, 
+  154, 152, 151, 167, 
+  160, 161, 155, 159, 
+  160, 160, 155, 153, 
+  163, 160, 165, 146, 
+  156, 153, 165, 156, 
+  158, 155, 154, 160, 
+  156, 163, 148, 151, 
+  154, 160, 169, 151, 
+  160, 159, 158, 157, 
+  154, 164, 146, 151, 
+  162, 158, 166, 156, 
+  156, 150, 161, 166, 
+  162, 155, 143, 159, 
+  157, 157, 156, 157, 
+  162, 161, 156, 156, 
+  162, 168, 149, 159, 
+  169, 162, 162, 156, 
+  150, 153, 159, 156, 
+  162, 154, 164, 161
+)
+
+# データ数を取得
+N <- length(data_x)
+N
+```
+
+　データ数を$N$で表します。\
+
+　データを用いて標本平均を計算します。
+
+```{r}
+# データセットから平均値を計算
+mean_x <- sum(data_x) / N
+mean_x
+```
+
+　N個のデータを$x_n$($n$は1からNの整数)で表すと、標本平均$\bar{x}$は次の式で定義されます。
+
+$$
+\begin{aligned}
+\bar{x}
+   &= \frac{x_1 + x_2 + \cdots + x_N}{N}
+\\
+   &= \frac{\sum_{n=1}^N x_n}{N}
+\\
+   &= \frac{1}{N}
+      \sum_{n=1}^N
+          x_n
+\end{aligned}
+$$
+
+　$x_n$は$n$番目のデータを表し、`data_x[n]`に対応します。また、$\sum_{n=1}^N x_n$は$N$個のデータの総和を表し、`sum(data_x)`に対応します。\
+　データ数$N$は、データ番号$n$と無関係な定数なので、総和$\sum_{n=1}^N$の外に出せます。\
+\
+
+
+## 2-3 度数分布表での平均値
+
+　度数分布表を用いて標本平均を計算します。\
+\
+
+　階級値と相対度数を計算します。詳しい説明や連続値の場合については、第1講を参照してください。
+
+```{r}
+# 階級の幅を指定
+class_width <- 5
+
+# 階級用の値を作成
+class_vec <- seq(
+  from = floor(min(data_x)/10) * 10, 
+  to = ceiling(max(data_x)/10) * 10, 
+  by = class_width
+)
+
+# 度数分布表を作成:(図1-2,2-1)
+freq_df <- tibble::tibble(
+  class_lower = class_vec[-length(class_vec)] + 1, # 階級の下限
+  class_upper = class_vec[-1] # 階級の上限
+) |> 
+  dplyr::group_by(class_lower, class_upper) |> # 階級ごとの計算用
+  dplyr::mutate(
+    class_value = median(c(class_lower, class_upper)), # 階級値
+    freq = sum((data_x >= class_lower) == (data_x <= class_upper)) # 度数
+  ) |> 
+  dplyr::ungroup() |> 
+  dplyr::mutate(
+    relative_freq = freq / N, # 相対度数
+    #cumulative_freq = cumsum(freq), # 累積度数
+    weighted_class_value = class_value * relative_freq # 階級値 × 相対度数
+  )
+freq_df
+```
+
+　第1講で求めた度数分布表の他に、階級値と相対度数の積を計算します。\
+
+　階級値と相対度数用いて標本平均を計算します。
+
+```{r}
+# 階級値と相対度数から平均値を計算
+mean_x <- sum(freq_df[["weighted_class_value"]])
+mean_x
+```
+
+　階級の数を$C$として、C個の階級値を$x_i$($i$は1からCの整数)、i番目の階級の度数を$N_i$とすると、相対度数は$\frac{N_i}{N}$で表せます。(一般的な表記ではないと思うので、この記号は覚えないでください。また、一般的な表記があるのであれば、教えてください。)\
+　標本平均(の近似値)は、次の式で計算できます。
+
+$$
+\begin{aligned}
+\bar{x}
+   &= x_1 \frac{N_1}{N}
+      + x_2 \frac{N_2}{N}
+      + \cdots
+      + x_C \frac{N_C}{N}
+\\
+   &= \sum_{i=1}^C
+          x_i \frac{N_i}{N}
+\\
+   &= \frac{1}{N}
+      \sum_{i=1}^C
+          x_i N_i
+\end{aligned}
+$$
+
+　C個の度数の和はデータ数$N = \sum_{i=1}^C N_i$であり、相対度数の総和は$\sum_{i=1}^C \frac{N_i}{N} = 1$です。これは、$\frac{\sum_{i=1}^C N_i}{N} = \frac{N}{N} = 1$であることから分かります。\
+\
+
+
+## 2-4 平均値のヒストグラムの中での役割
+
+　平均値とヒストグラムの関係をグラフで確認します。\
+\
+
+　ヒストグラムに標本平均の位置を重ねて描画します。度数分布表ではなくデータから作図します。詳しくは第1講を参照してください。
+
+```{r, fig.width=8, fig.height=6}
+# データを格納
+data_df <- tibble::tibble(x = data_x)
+
+# 階級値を抽出
+class_value_vec <- freq_df[["class_value"]]
+
+# 集計用に値を追加
+class_value_max <- class_value_vec[length(class_value_vec)] # 最後の値を抽出
+class_value_vec <- c(class_value_vec, class_value_max+class_width)
+
+# (装飾用に)軸ラベルを作成
+x_label_vec <- paste0(
+  class_value_vec-0.5*class_width, "~", class_value_vec+0.5*class_width, 
+  "\n(", class_value_vec, ")"
+)
+
+# (装飾用に)タイトル用の文字列を作成
+title_label <- paste0("list(N==", N, ", bar(x)==", mean_x, ")")
+
+# ヒストグラムと平均値の関係を作図
+ggplot() + 
+  geom_histogram(data = data_df, mapping = aes(x = x, y = ..count..), 
+                 breaks = class_value_vec-0.5*class_width, fill = "#00A968") + # 度数
+  geom_vline(xintercept = mean_x, color ="red", size = 1, linetype ="dashed") + # 平均値
+  scale_x_continuous(breaks = class_value_vec, labels = x_label_vec) + # x軸目盛
+  labs(title = "Histogram", 
+       subtitle = parse(text = title_label), 
+       x = "class value", y = "frequency")
+```
+
+　平均値を赤色の破線で示します。垂線は`geom_vline()`で描画できます。`xintercept`引数に平均値を指定します。\
+　(この図は、各バーの中央が階級値となるように、階級が変わらないように階級を変更して、プロットしています。図表2-2は、おそらく離散値の度数分布表と連続値のプロットのギャップを埋めるために、各バーの左側が階級値となるようにプロットされているのだと思います。)\
+\
+
+　階級(階級値)と平均値の関係を見てみましょう。
+
+<details><summary>作図コード(クリックで展開)</summary>
+
+　階級の幅を1ずつ大きくするヒストグラムのアニメーションを作成します。
+
+```{r, eval=FALSE}
+# 画像の保存先を指定
+dir_path <- "../figure/tmp_folder"
+
+# 階級幅の最大値(フレーム数)を指定
+class_width_max <- 30
+
+# 階級を変更して作図
+for(class_width in 1:class_width_max) {
+  
+  # 階級用の値を作成
+  class_vec <- seq(from = floor(min(data_x)/10)*10, to = ceiling(max(data_x)/10)*10, by = class_width)
+  class_vec <- c(class_vec, class_vec[length(class_vec)]+class_width) # 集計用に上限以上の値を1つ追加
+  
+  # 度数分布表を作成:(連続値)
+  freq_df <- tibble::tibble(
+    class_lower = class_vec[-length(class_vec)], # 階級の下限
+    class_upper = class_vec[-1] # 階級の上限
+  ) |> 
+    dplyr::group_by(class_lower, class_upper) |> 
+    dplyr::mutate(
+      class_value = median(c(class_lower, class_upper)), # 階級値
+      freq = sum((data_x >= class_lower) == (data_x < class_upper)) # 度数
+    ) |> 
+    dplyr::ungroup() |> 
+    dplyr::mutate(
+      relative_freq = freq / length(data_x), # 相対度数
+      weighted_class_value = class_value * relative_freq # 階級値 × 相対度数
+    )
+  
+  # 平均値を計算
+  mean_x <- sum(freq_df[["weighted_class_value"]])
+  
+  # 装飾用の文字列を作成
+  title_label <- paste0("list(N==", N, ", bar(x)==", mean_x, ")")
+  x_label_vec <- paste0(
+    freq_df[["class_lower"]], "~", freq_df[["class_upper"]], 
+    "\n(", freq_df[["class_value"]], ")"
+  )
+  
+  # ヒストグラムと平均値の関係を作図
+  g <- ggplot() + 
+    geom_bar(data = freq_df, mapping = aes(x = class_value, y = freq), 
+             stat = "identity", width = class_width, fill = "#00A968") + # ヒストグラム
+    geom_vline(xintercept = mean_x, color ="red", size = 1, linetype ="dashed") + # 平均値
+    scale_x_continuous(breaks = freq_df[["class_value"]], labels = x_label_vec) + # x軸目盛
+    coord_cartesian(xlim = c(min(data_x), max(data_x)), 
+                    ylim = c(0, length(data_x))) + # 表示範囲
+    labs(title = "Histogram", 
+         subtitle = parse(text = title_label), 
+         x = "class value", y = "frequency")
+  
+  # グラフを書き出し
+  file_name <- sprintf(paste0("%0", nchar(class_width_max), "d"), class_width)
+  ggplot2::ggsave(
+    filename = paste0(dir_path, "/", file_name, ".png"), plot = g, 
+    width = 800, height = 600, units = "px", dpi = 100
+  )
+}
+
+# ファイル名を取得
+file_name_vec <- list.files(dir_path)
+
+# gif画像を作成
+paste0(dir_path, "/", file_name_vec) |> # ファイルパスを作成
+  magick::image_read() |> # 画像ファイルを読み込み
+  magick::image_animate(fps = 1, dispose = "previous") |> # gif画像を作成
+  magick::image_write_gif(path = "../figure/ch02_histgram.gif", delay = 1/2) -> tmp_path # gifファイルを書き出し
+```
+
+　階級の幅の最大値を`class_width_max`として値を指定します。`for()`を使って、`1`から`class_width_max`の整数を順番に`class_vec`とします。\
+　同様に作図してそれぞれグラフを保存します。画像の書き出し先フォルダ`dir_path`は空である必要があります。また、画像ファイルの読み込み時に、書き出した順番と(文字列基準で)同じ並びになるようなファイル名を付ける必要があります。\
+　保存した画像ファイルを`image_read()`で読み込んで、`image_animate()`と`image_write_gif()`でgif画像に変換します。\
+
+</details>
+<br>
+
+![](../figure/ch02_histgram.gif)
+
+　階級の取り方によって平均値が変化しますが、データから求めた平均値と大きく変わらないのが分かります。\
+\
+
+
+## 2-5 平均値をどう捉えるべきか
+
+　次は、データや階級値と平均値の関係をグラフで確認します。\
+\
+
+　データとデータ番号をデータフレームに格納します。
+
+```{r}
+# データを格納
+data_df <- tibble::tibble(
+  n = 1:N, # データ番号
+  x = data_x
+)
+data_df
+```
+
+\ 
+
+　各データを棒グラフで表します。
+
+```{r, fig.width=8, fig.height=6}
+# 生データから標本平均を計算
+mean_x <- sum(data_df[["x"]]) / N
+
+# 生データと平均値の関係を作図
+ggplot() + 
+  geom_bar(data = data_df, mapping = aes(x = n, y = x), 
+           stat = "identity", fill = "#00A968", color = "#00A968") + # データ
+  geom_hline(yintercept = mean_x, color ="red", size = 1, linetype ="dashed") + # 平均値
+  labs(title = "dataset", 
+       subtitle = parse(text = paste0("bar(x)==", mean_x)), 
+       x = "n", y = expression(x[n]))
+```
+
+　平均値を赤色の破線で示します。水平線は`geom_hline()`で描画できます。`yintercept`引数に平均値を指定します。\
+
+　データを昇順に並べ替えてみます。
+
+```{r}
+# データを格納
+data_df <- tibble::tibble(
+  x = data_x
+) |> 
+  dplyr::arrange(x) |> # 並べ替え
+  dplyr::mutate(n = dplyr::row_number()) # データ番号を割り当て
+data_df
+```
+
+　`arrange()`で昇順に並べ替えて、`row_number()`で行(データ番号)番号を追加します。\
+
+　同じ作図コードで、各データを棒グラフで表します。
+
+```{r, echo=FALSE, fig.width=8, fig.height=6}
+### 資料作成用:(再掲)
+
+# 生データと平均値の関係を作図
+ggplot() + 
+  geom_bar(data = data_df, mapping = aes(x = n, y = x), 
+           stat = "identity", fill = "#00A968", color = "#00A968") + # データ
+  geom_hline(yintercept = mean_x, color ="red", size = 1, linetype ="dashed") + # 平均値
+  labs(title = "dataset", 
+       subtitle = parse(text = paste0("bar(x)==", mean_x)), 
+       x = "n", y = expression(x[n]))
+```
+
+　標本平均は、次の式で定義されるのでした。
+
+$$
+\bar{x}
+    = \frac{1}{N}
+      \sum_{n=1}^N
+          x_n
+$$
+
+　両辺にデータ数$N$を掛けます。
+
+$$
+N \bar{x}
+    = \sum_{n=1}^N
+          x_n
+$$
+
+　この式から、標本平均$\bar{x}$を$N$倍すると、データの総和$\sum_{n=1}^N x_n$になるのが分かります。\
+
+　「緑色のバーの面積」が「データの総和」、「(x軸の同じ範囲における)赤色の水平線からx軸の面積」が「N倍した平均値」に対応します。そして、2つの面積は等しくなります。言い換えると、2つの面積が等しくなるような値が平均値です。\
+\
+
+　同様に、階級値を用いた場合も確認しましょう。\
+　各階級値を度数に応じて複製します。
+
+```{r}
+# 階級値を複製
+class_value_df <- freq_df |> 
+  dplyr::select(class_value, freq) |> 
+  tidyr::uncount(freq) |> # 度数に応じて複製
+  dplyr::mutate(n = dplyr::row_number()) # データ番号
+class_value_df
+```
+
+　`freq_df`から、階級値と度数の列を取り出します。\
+　`uncount()`で`freq`に応じて行を複製します。これにより`N`行のデータフレームになります。\
+　`row_number()`で行番号を割り当てて、データ番号とします。\
+
+　複製した階級値を棒グラフで表します。
+
+```{r, fig.width=8, fig.height=6}
+# 階級値から標本平均を計算
+mean_x <- sum(freq_df[["weighted_class_value"]])
+
+# 各階級と平均値の関係を作図
+ggplot() + 
+  geom_bar(data = class_value_df, mapping = aes(x = n, y = class_value), 
+           stat = "identity", fill = "#00A968", color = "#00A968") + # データセット
+  geom_hline(yintercept = mean_x, color ="red", size = 1, linetype ="dashed") + # 平均値
+  labs(title = "class value", 
+       subtitle = parse(text = paste0("bar(x)==", mean_x)), 
+       x = "n", y = expression(x[n]))
+```
+
+　標本平均(の近似値)は、次の式で計算できるのでした。
+
+$$
+\bar{x}
+    = \frac{1}{N}
+      \sum_{i=1}^C
+          x_i N_i
+$$
+
+　両辺にデータ数$N$を掛けます。
+
+$$
+N \bar{x}
+    = \sum_{i=1}^C
+          x_i N_i
+$$
+
+　この式から、$N$倍した標本平均と、階級値と度数の積$x_i N_i$の和が等しいのが分かります。\
+
+　「同じ高さのバー(度数に応じて複製した階級値のバー)」が「度数$N_i$倍した階級値$x_i$」、「全てのバーの面積」が「各高さのバーのまとまりの和」であり「$x_i N_i$の総和」に対応しています。こちらも、バーの面積と破線からx軸の面積が一致します。\
+\
+
+　どちらの計算方法(図)においても、平均値(赤色の水平線)を「超える値の合計」と「足りない値の合計」が一致する値が平均値になります。また、超える値と足りない値を偏差と言います。偏差については第3講で説明します。\
+\
+
+
+## 練習問題
+
+　30ページの表を格納して、度数分布表を作成します。
+
+```{r}
+# 度数分布を作成
+freq_df <- tibble::tibble(
+  class_value = c(30, 50, 70, 90, 110, 130), # 階級値
+  freq = c(5, 10, 15, 40, 20, 10) # 度数
+) |> 
+  dplyr::mutate(
+    relative_freq = freq / sum(freq), # 相対度数
+    cumulative_freq = cumsum(freq), # 累積度数
+    weighted_class_value = class_value * relative_freq # 階級値 × 相対度数
+  )
+freq_df
+```
+
+　同様に計算します。\
+
+　標本平均を計算します。
+
+```{r}
+# 階級値と相対度数から平均値を計算
+mean_x <- sum(freq_df[["weighted_class_value"]])
+mean_x
+```
+
+\ 
+
+　ヒストグラムを作成します。
+
+```{r, fig.width=8, fig.height=6}
+# 階級の幅を計算
+class_width <- freq_df[["class_value"]][2] - freq_df[["class_value"]][1]
+
+# タイトル用の文字列を作成
+title_label <- paste0("list(N==", sum(freq_df[["freq"]]), ", bar(x)==", mean_x, ")")
+
+# ヒストグラムと平均値の関係を作図
+ggplot() + 
+  geom_bar(data = freq_df, mapping = aes(x = class_value, y = freq), 
+           stat = "identity", width = class_width, fill = "#00A968") + # ヒストグラム
+  geom_vline(xintercept = mean_x, color ="red", size = 1, linetype ="dashed") + # 平均値
+  scale_x_continuous(breaks = freq_df[["class_value"]]) + # x軸
+  labs(title = "Histogram", 
+       subtitle = parse(text = title_label), 
+       x = "class value", y = "frequency")
+```
+
+　階級値の差から階級の幅を計算して作図します。\
+\
+
+　この講では、平均値を確認しました。次講では、分散と標準偏差を確認します。\
+\
+
+
+# 参考書籍
+
+- 小島寛之『完全独習 統計学入門』ダイヤモンド社,2006年.
+
+
