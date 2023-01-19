@@ -1,0 +1,218 @@
+---
+title: "『完全独習 統計学入門』"
+author: "@anemptyarchive\\thanks{\\url{https://www.anarchive-beta.com/}}"
+date: "`r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
+output: 
+  html_document: 
+    toc: TRUE       # 目次
+    toc_depth: 4    # 目次の見出しレベル
+    toc_float: TRUE # 目次のスクロール追跡
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+----
+
+【編集履歴】
+
+- 2023.01.19：初稿完成
+
+-----
+
+
+# 第5講 標準偏差(S.D.)は、株のリスクの指標(ボラティリティ)として活用できる
+
+　前講では、標準偏差の役割を確認しました。この講では、標準偏差をボラティリティとして株の収益率を比較します。\
+\
+
+　利用するパッケージを読み込みます。
+
+```{r, eval=FALSE}
+# 利用パッケージ
+library(tidyverse)
+library(magick)
+```
+
+```{r, echo=FALSE}
+### 資料作成用:(チェック用)
+
+# チェック用
+library(ggplot2)
+```
+
+　この記事では、基本的に`パッケージ名::関数名()`の記法を使うので、パッケージを読み込む必要はありません。ただし、作図コードがごちゃごちゃしないようにパッケージ名を省略しているため`ggplot2`を読み込む必要があります。\
+　また、ネイティブパイプ演算子`|>`を使っています。`magrittr`パッケージのパイプ演算子`%>%`に置き換えても処理できますが、その場合は`magrittr`も読み込む必要があります。\
+\
+
+
+## 5-2 平均収益率だけでは、優良な投資かどうかは判断できない
+
+　まずは、データを読み込んでグラフで確認します。\
+\
+
+　図表5-3のデータセットをデータフレームとして作成します。
+
+```{r}
+# データを作成:(図5-3)
+revenue_df_wide <- tibble::tibble(
+  month = 1:12, 
+  year_1980 = c(9.2, 2.3, -6.5, 9, 5.3, -4.3, -3.7, 7, 7.6, 1.4, -3.4, 0.7), 
+  year_1981 = c(2.8, -1.4, 17.6, 17.8, 5.5, -1.9, 1.9, 9, -10.3, -10.3, -7.7, 6.5), 
+  year_1982 = c(-0.6, -11.8, 3.5, 1.9, -5.5, -9.1, -5.7, 2.3, -4.9, -0.8, 8, 6.7), 
+  year_1983 = c(-2.8, 9.3, 11.4, 3, -7.5, 2.5, -0.6, 1.8, 5.1, -2.3, -6, 10.6), 
+  year_1984 = c(0, -5.7, 10.6, -0.6, -11.2, -3.8, -5.2, 6.2, -4.2, 2.1, 0.6, 4.7)
+)
+revenue_df_wide
+```
+
+　5年分の株の月次収益率です。\
+
+　作図用に、各年の収益率のデータ(列)を1列にまとめます。
+
+```{r}
+# 縦型のデータフレームに変換
+revenue_df <- revenue_df_wide |> 
+  tidyr::pivot_longer(
+    cols = !month, 
+    names_to = "year", 
+    names_prefix = "year_", 
+    names_ptypes = list(year = factor()), 
+    values_to = "revenue_rate"
+  )
+revenue_df
+```
+
+　`pivot_longer()`で横型のデータフレームを縦型に変換します。`cols`引数に変換する列(変換しない列を指定する場合は頭に`!`を付けます)、`names_to`引数に「現在の列名」を格納する新たな列の名前、`values_to`引数に「現在の各列の値」を格納する新たな列の名前を指定します。また、`names_prefix`引数に現列名の頭から取り除く文字列、`names_ptypes`(または`names_transform`)引数で格納後の型を指定できます。\
+
+　年ごとに収益率の推移のグラフを作成します。
+
+```{r, fig.width=8, fig.height=6}
+# 月次収益率を作図
+ggplot() + 
+  geom_line(data = revenue_df, 
+            mapping = aes(x = month, y = revenue_rate, color = year), 
+            size = 1) + # 収益率
+  scale_x_continuous(breaks = 1:12) + # x軸目盛
+  labs(title = "monthly revenue rate", 
+       x = "month", y = "revenue rate")
+```
+
+　`color`引数に`year`列を指定して、年ごとに折れ線グラフを描画します。\
+\
+
+
+## 5-3 ボラティリティが意味するところ
+
+　次に、平均値と標準偏差を計算して、ボラティリティのグラフを作成します。\
+\
+
+　年ごとに平均収益率を計算します。
+
+```{r}
+# 年ごとの平均値を計算
+mean_df <- revenue_df |> 
+  dplyr::group_by(year) |> 
+  dplyr::summarise(
+    mean = mean(revenue_rate), .groups = "drop"
+  )
+mean_df
+```
+
+　年ごとに(`year`列で)グループ化して、`summarise()`を使って標本平均を計算します。`summarise()`を使って計算すると、計算に利用した行が集約されます(行数が変化します)。\
+
+　平均収益率を重ねてグラフを作成します。
+
+```{r, fig.width=8, fig.height=6}
+# タイトル用の文字列を作成
+stat_label <- paste0(
+  "mean==", round(mean(mean_df[["mean"]]), digits = 3)
+)
+
+# 月次収益率と平均値を作図
+ggplot() + 
+  geom_line(data = revenue_df,
+            mapping = aes(x = month, y = revenue_rate, color = year), 
+            size = 1) + # 収益率
+  geom_hline(data = mean_df, mapping = aes(yintercept = mean, color = year), 
+             size = 1, linetype ="dashed") + # 平均値
+  scale_x_continuous(breaks = 1:12) + # x軸目盛
+  labs(title = "average revenue rate", 
+       subtitle = parse(text = stat_label), 
+       x = "month", y = "revenue rate")
+```
+
+　各年の平均収益率を`geom_hline()`で水平線として描画します。\
+　破線の位置が高いほど、収益率が高いことを表します。ただし、あくまで年間を通した値であり、月ごとの変動を表しません。\
+
+　そこで、年ごとに標準偏差を計算します。
+
+```{r}
+# 年ごとの標準偏差を計算
+sd_df <- revenue_df |> 
+  dplyr::group_by(year) |> 
+  dplyr::mutate(
+    mean = mean(revenue_rate), 
+    sd = sd(revenue_rate) * sqrt(12-1) / sqrt(12)
+  )
+sd_df
+```
+
+　`mutate()`を使って標本平均と標本標準偏差を計算します。`mutate()`を使って計算すると、計算に利用した行が集約されません(行数が変化しません)。\
+
+　年ごとの標準偏差を取り出します。
+
+```{r}
+# 標準偏差を抽出
+sd_vec <- sd_df |> 
+  dplyr::distinct(year, sd) |> # 重複を削除
+  dplyr::pull(sd) # 列を抽出
+sd_vec
+```
+
+　`sd_df`の平均値と標準偏差の値は、12か月分に複製されています。そこで、`distinct()`で重複を除去してから、`pull()`で標準偏差の列を取り出します。\
+
+　平均収益率の平均値を中心に標準偏差1個分の範囲を重ねてグラフを作成します。
+
+```{r, fig.width=8, fig.height=6}
+# タイトル用の文字列を作成
+stat_label <- paste0(
+  "list(", 
+  "mean==", round(mean(mean_df[["mean"]]), digits = 3), 
+  ", sd==", round(mean(sd_vec), digits = 3), 
+  ")"
+)
+
+# 月次収益率とボラティリティを作図
+ggplot() + 
+  geom_line(data = revenue_df, 
+            mapping = aes(x = month, y = revenue_rate, color = year), 
+            size = 1) + # 収益率
+  geom_hline(data = mean_df, 
+             mapping = aes(yintercept = mean, color = year), 
+             size = 1, linetype ="dashed") + # 平均値
+  geom_ribbon(data = sd_df, 
+              mapping = aes(x = month, ymin = mean-sd, ymax = mean+sd, color = year, fill = year), 
+              alpha = 0.1, linetype = "dotted") + # 標準偏差の範囲
+  scale_x_continuous(breaks = 1:12) + # x軸目盛
+  facet_wrap(year~.) + # グラフを分割
+  theme(legend.position = "none") + # 凡例の非表示
+  labs(title = "volatility", 
+       subtitle = parse(text = stat_label), 
+       x = "month", y = "revenue rate")
+```
+
+　`geom_ribbon()`で平均値から標準偏差1個分を引いた値と足した値の範囲を描画します。\
+　各年のグラフが重なると分かりにくくなるので、`facet_wrap()`で年ごとに分割します。\
+\
+
+　この講では、標準偏差を利用してボラティリティを比較しました。\
+\
+
+
+# 参考書籍
+
+- 小島寛之『完全独習 統計学入門』ダイヤモンド社,2006年.
+
+
