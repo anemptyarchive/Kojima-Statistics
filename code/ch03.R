@@ -88,7 +88,7 @@ ggplot() +
   geom_histogram(data = data_x_df, mapping = aes(x = value), 
                  breaks = 0:11-0.5, closed ="left", fill = "#00A968") + # 度数
   geom_vline(xintercept = mean_x, 
-             color = "red",size = 1, linetype = "dashed") + # 平均値
+             color = "red", size = 1, linetype = "dashed") + # 平均値
   geom_segment(mapping = aes(x = mean_x-sd_x, y = 0, xend = mean_x+sd_x, yend = 0), 
                color = "blue", size = 1, 
                arrow = arrow(ends = "both", length = unit(10, units = "pt"))) + # 平均値 ± 標準偏差
@@ -103,7 +103,7 @@ ggplot() +
   geom_histogram(data = data_y_df, mapping = aes(x = value), 
                  breaks = 0:11-0.5, closed ="left", fill = "#00A968") + # 度数
   geom_vline(xintercept = mean_y, 
-             color = "red",size = 1, linetype = "dashed") + # 平均値
+             color = "red", size = 1, linetype = "dashed") + # 平均値
   geom_segment(mapping = aes(x = mean_y-sd_y, y = 0, xend = mean_y+sd_y, yend = 0), 
                color = "blue", size = 1, 
                arrow = arrow(ends = "both", length = unit(10, units = "pt"))) + # 平均値 ± 標準偏差
@@ -129,7 +129,7 @@ ggplot() +
   geom_bar(data = freq_x_df, mapping = aes(x = i, y = freq), 
            stat = "identity", width = 1, fill = "#00A968") + # 度数
   geom_vline(xintercept = mean_x, 
-             color = "red",size = 1, linetype = "dashed") + # 平均値
+             color = "red", size = 1, linetype = "dashed") + # 平均値
   geom_segment(mapping = aes(x = mean_x-sd_x, y = 0, xend = mean_x+sd_x, yend = 0), 
                color = "blue", size = 1, 
                arrow = arrow(ends = "both", length = unit(10, units = "pt"))) + # 平均値 ± 標準偏差
@@ -144,7 +144,7 @@ ggplot() +
   geom_bar(data = freq_y_df, mapping = aes(x = i, y = freq), 
            stat = "identity", width = 1, fill = "#00A968") + # 度数
   geom_vline(xintercept = mean_y, 
-             color = "red",size = 1, linetype = "dashed") + # 平均値
+             color = "red", size = 1, linetype = "dashed") + # 平均値
   geom_segment(mapping = aes(x = mean_y-sd_y, y = 0, xend = mean_y+sd_y, yend = 0), 
                color = "blue", size = 1, 
                arrow = arrow(ends = "both", length = unit(10, units = "pt"))) + # 平均値 ± 標準偏差
@@ -220,13 +220,11 @@ for(n in 1:N) {
   data_x[n] <- sample(x = 1:10, size = 1)
   
   # データを格納
-  data_df <- tibble::tibble(
-    value = data_x
-  )
+  data_df <- tibble::tibble(value = data_x)
   
   # 平均値と標準偏差を計算
   mean_x <- sum(data_x) / length(data_x)
-  sd_x <- sqrt((sum(data_x) - mean_x) / length(data_x))
+  sd_x <- sqrt(sum((data_x - mean_x)^2) / length(data_x))
   print(sd_x)
   
   # ヒストグラムを作成
@@ -234,7 +232,7 @@ for(n in 1:N) {
     geom_histogram(data = data_df, mapping = aes(x = value), 
                    breaks = 0:11-0.5, closed ="left", fill = "#00A968") + # 度数
     geom_vline(xintercept = mean_x, 
-               color = "red",size = 1, linetype = "dashed") + # 平均値
+               color = "red", size = 1, linetype = "dashed") + # 平均値
     geom_segment(mapping = aes(x = mean_x-sd_x, y = 0, xend = mean_x+sd_x, yend = 0), 
                  color = "blue", size = 1, 
                  arrow = arrow(ends = "both", length = unit(10, units = "pt"))) + # 平均値 ± 標準偏差
