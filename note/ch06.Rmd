@@ -1,0 +1,250 @@
+---
+title: "『完全独習 統計学入門』"
+author: "@anemptyarchive\\thanks{\\url{https://www.anarchive-beta.com/}}"
+date: "`r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
+output: 
+  html_document: 
+    toc: TRUE       # 目次
+    toc_depth: 4    # 目次の見出しレベル
+    toc_float: TRUE # 目次のスクロール追跡
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+----
+
+【編集履歴】
+
+- 2023.01.20：初稿完成
+
+-----
+
+
+# 第6講 標準偏差(S.D.)でハイリスク・ハイリターン(シャープレシオ)も理解できる
+
+　前講では、標準偏差をボラティリティとして株の収益率を比較しました。この講では、標準偏差を使ってシャープレシオを計算して金融商品を比較します。\
+\
+
+　利用するパッケージを読み込みます。
+
+```{r, eval=FALSE}
+# 利用パッケージ
+library(tidyverse)
+library(magick)
+```
+
+```{r, echo=FALSE}
+### 資料作成用:(チェック用)
+
+# チェック用
+library(ggplot2)
+```
+
+　この記事では、基本的に`パッケージ名::関数名()`の記法を使うので、パッケージを読み込む必要はありません。ただし、作図コードがごちゃごちゃしないようにパッケージ名を省略しているため`ggplot2`を読み込む必要があります。\
+　また、ネイティブパイプ演算子`|>`を使っています。`magrittr`パッケージのパイプ演算子`%>%`に置き換えても処理できますが、その場合は`magrittr`も読み込む必要があります。\
+\
+
+
+## 6-1 ハイリスク・ハイリターンとローリスク・ローリターン
+
+　まずは、データを読み込んで、グラフで確認します。\
+\
+
+　図表6-1のデータセットをデータフレームとして作成します。
+
+```{r}
+# データを作成:(図表6-1)
+revenue_df_wide <- tibble::tibble(
+  year = 1988:1995, 
+  A = c(13.2, 20.9, -6.9, 35.6, 8.9, 12.5, -1.7, 31.1), 
+  B = c(7.7, 9.5, 3.7, 17.2, 7.9, 10.3, -3.7, 15.6), 
+  C = c(7.3, 9, 8.1, 5.9, 3.3, 2.6, 3.8, 5.4), 
+  D = c(7.4, 8.2, 7.9, 7.1, 4.2, 3.3, 3, 4.9)
+)
+revenue_df_wide
+```
+
+　8年分の収益実績です。\
+
+　作図用に、各商品の収益率のデータ(列)を1列にまとめます。
+
+```{r}
+# 縦型のデータフレームに変換
+revenue_df <- revenue_df_wide |> 
+  tidyr::pivot_longer(
+    cols = !year, 
+    names_to = "name", 
+    names_ptypes = list(name = factor()), 
+    values_to = "revenue_rate"
+  )
+revenue_df
+```
+
+　`pivot_longer()`で横型のデータフレームを縦型に変換します。`cols`引数に変換する列(変換しない列を指定する場合は頭に`!`を付けます)、`names_to`引数に「現在の列名」を格納する新たな列の名前、`values_to`引数に「現在の各列の値」を格納する新たな列の名前を指定します。また、`names_ptypes`(または`names_transform`)引数で格納後の型を指定できます。\
+
+　商品ごとに標準偏差と平均値を計算します。
+
+```{r}
+# 標準偏差と平均値を計算
+stat_df <- revenue_df |> 
+  dplyr::group_by(name) |> # 商品ごとの計算用
+  dplyr::summarise(
+    sd = sd(revenue_rate), 
+    mean = mean(revenue_rate), 
+    .groups = "drop"
+  )
+stat_df
+```
+
+　商品ごとに(`name`列で)グループ化して、`summarise()`を使って標本標準偏差(不偏標準偏差)と標本平均を計算します。`summarise()`を使って計算すると、計算に利用した行が集約されます(行数が変化します)。\
+
+　標準偏差を説明変数、平均値を被説明変数として、回帰係数を計算します。
+
+```{r}
+# 回帰係数を計算
+res <- lm(stat_df[["mean"]]~stat_df[["sd"]])
+
+# 傾きと切片を取得
+a <- res[["coefficients"]][2] # 傾き
+b <- res[["coefficients"]][1] # 切片
+
+# names属性を削除
+names(a) <- NULL
+names(b) <- NULL
+a; b
+```
+
+　`lm(被説明変数~説明変数)`で回帰係数を計算できます。\
+　`lm()`の出力の`"coefficients"`から回帰直線の傾き$a$と切片$b$を取り出します。\
+
+　回帰直線を計算します。
+
+```{r}
+# x軸の最大値を設定
+x_max <- ceiling(max(stat_df[["sd"]]))+1
+
+# 回帰直線を計算
+regression_df <- tibble::tibble(
+  x = seq(from = 0, to = x_max, by = 0.1), 
+  y = a * x + b
+)
+regression_df
+```
+
+　作図用のx軸の値$x$を作成して、y軸の値$y = a x + b$を計算します。\
+
+　リスク(標準偏差)とリターン(平均値)の関係に回帰直線を重ねたグラフを作成します。
+
+```{r, fig.width=8, fig.height=6}
+# y軸の最大値を設定
+y_max <- ceiling(max(regression_df[["y"]]))
+
+# タイトル用の文字列を作成
+regression_label <- paste0("y==", round(a, digits = 2), "*x+", round(b, digits = 2))
+
+# データと回帰直線を作図
+ggplot() + 
+  geom_point(data = stat_df, 
+             mapping = aes(x = sd, y = mean, color = name), 
+             size = 4) + # データ
+  geom_line(data = regression_df, 
+            mapping = aes(x = x, y = y)) + # 回帰直線
+  coord_cartesian(ylim = c(0, y_max)) + # 描画範囲
+  labs(title = "risk and return", 
+       subtitle = parse(text = regression_label), 
+       x = "S.D.", y = "mean")
+```
+
+　4つの商品(データ)を説明できる直線を引けました。\
+\
+
+
+## 6-3 金融商品の優劣を測る数値・シャープレシオ
+
+　次は、シャープレシオを計算して、グラフを作成します。\
+\
+
+　図表6-6のデータセットをデータフレームとして作成します。
+
+```{r}
+# 日本国債の利回りを設定:(図表6-6)
+JGB <- 3.4
+
+# シャープレシオを計算
+sharpe_df <- tibble::tibble(
+  id = 1:7, 
+  name = c("nissei", "diichi", "sumitomo", "meiji", "asahi", "mitsui", "yasuda"), 
+  mean = c(4, 4.69, 4.62, 4.8, 5.41, 6.49, 4.85), 
+  sd = c(5.48, 4.47, 5.59, 4.28, 5.64, 4.64, 6.43)
+) |> # 値を格納
+  dplyr::mutate(
+    sharpe_ratio = (mean - JGB) / sd, 
+    rank = dplyr::row_number(-sharpe_ratio)
+  ) |> 
+  dplyr::arrange(rank) |> 
+  dplyr::mutate(
+    name = factor(name, levels = name) # 順位に応じて因子レベルを設定
+  )
+sharpe_df
+```
+
+　国債の利回りを`JGB`として値を指定します。\
+
+　会社ごとの平均値$\bar{x}$と標準偏差$S$をデータフレームに格納します。\
+　会社ごとにシャープレシオを$\frac{\bar{x} - \mathrm{JGB}}{S}$で計算します。\
+　シャープレシオの値に応じて`row_number()`で順位を付けます。`row_number()`は昇順に行番号を割り当てるので、シャープレシオ列の値に`-`を付けることで大小関係を反転させて、降順に値を割り当てます。\
+
+　順位に応じて`arrange()`で行を並べ替えて、作図時の色付けや凡例の並びを調整するために、会社列を因子型にして因子レベルを設定します。(装飾用の処理なので省略できます。)\
+
+　シャープレシオ(角度のマーク)を描画するためのデータフレームを作成します。(装飾用の処理です。)
+
+```{r}
+# シャープレシオの
+angle_df <- sharpe_df |> 
+  dplyr::group_by(name) |> # 商品ごとの計算用
+  dplyr::summarise(
+    theta = seq(from = 0, to = atan(sharpe_ratio), by = 0.01), # 角度(ラジアン)を作成
+    x = cos(theta) * (id*0.05+0.1), 
+    y = sin(theta) * (id*0.05+0.1) + JGB, 
+    .groups = "drop"
+  )
+angle_df
+```
+
+　逆タンジェント関数`atan()`でシャープレシオ(傾き)から弧度法における角度(ラジアン)を作成して、コサイン関数`cos()`でx軸の値、サイン関数`sin()`でy軸の値を計算します。さらに、y軸の値に国債の利回り`JGB`を加えます。`(id*0.05+0.1)`はサイズ調整用の値です。\
+
+　リスクとリターンの関係にシャープレシオを重ねたグラフを作成します。
+
+```{r, fig.width=8, fig.height=6}
+# シャープレシオを作図
+ggplot() + 
+  geom_point(data = sharpe_df, 
+             mapping = aes(x = sd, y = mean, color = name), 
+             size = 4) + # データ
+  geom_segment(data = sharpe_df, 
+               mapping = aes(x = 0, y = JGB, xend = sd, yend = mean, color = name)) + # データ線
+  geom_path(data = angle_df, mapping = aes(x = x, y = y, color = name)) + # シャープレシオ
+  geom_hline(yintercept = JGB, linetype = "dotted") + # 国債の利回り
+  labs(title = "sharpe ratio", 
+       subtitle = paste0("Japanese Government Bonds : ", JGB), 
+       x = "S.D.", y = "mean")
+```
+
+　国債の利回りの点と、各商品の点を結ぶ線分を`geom_segment()`で描画します。`x, y`引数に始点の座標(国債の利回り)、`xend, yend`引数に終点の座標(各会社の実績)を指定します。\
+　国債の利回りを示す水平線を`geom_hline()`で描画します。`yintercept`引数に国債の利回りを指定します。\
+　水平線と線分の角度(傾き)を示す孤(角度のマーク)を`geom_path()`で描画します。\
+
+　平均収益率(y軸の値)の大小ではなく、シャープレシオ(角度)の大きさで商品を評価できます。\
+\
+
+　この講では、標準偏差を利用してシャープレシオを比較しました。\
+\
+
+
+# 参考書籍
+
+- 小島寛之『完全独習 統計学入門』ダイヤモンド社,2006年.
+
+
