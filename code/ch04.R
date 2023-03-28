@@ -20,7 +20,7 @@ N <- 30
 data_x <- rnorm(n = N, mean = 0, sd = 1)
 
 # 平均値・分散・標準偏差を計算
-mean_x     <- sum(data_x) / length(data_x)
+mean_x     <- sum(data_x) / N
 variance_x <- sum((data_x - mean_x)^2) / length(data_x)
 sd_x       <- sqrt(variance_x)
 mean_x; variance_x; sd_x
