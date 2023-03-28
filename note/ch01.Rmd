@@ -50,6 +50,9 @@ library(ggplot2)
 
 ## 1-1 生データでは何もわからないから統計を使う
 
+　まずは、データを読み込みます。\
+\
+
 　図表1-1のデータセットをベクトルとして作成します。
 
 ```{r}
@@ -85,6 +88,9 @@ length(data_x)
 
 ## 1-2 ヒストグラムを作る
 
+　次に、度数分布表とヒストグラムを作成します。\
+\
+
 　データの最小値と最大値を抽出します。
 
 ```{r}
@@ -103,7 +109,11 @@ min_x; max_x
 class_width <- 5
 
 # 階級用の値を作成
-class_vec <- seq(from = floor(min_x/10)*10, to = ceiling(max_x/10)*10, by = class_width)
+class_vec <- seq(
+  from = floor(min_x/10) * 10, 
+  to = ceiling(max_x/10) * 10, 
+  by = class_width
+)
 class_vec
 ```
 
@@ -215,12 +225,15 @@ ggplot() +
 　横軸の体裁を`scale_x_continuous()`で設定できます。
 
 ```{r, fig.width=8, fig.height=6}
+# 軸目盛ラベルを作成
+x_label_vec <- paste0(freq_df[["class_lower"]], "~", freq_df[["class_upper"]])
+
 # ヒストグラムを作成
 ggplot() + 
   geom_bar(data = freq_df, mapping = aes(x = class_value, y = freq), 
            stat = "identity", width = class_width, fill = "#00A968") + 
   scale_x_continuous(breaks = freq_df[["class_value"]], 
-                     labels = paste0(freq_df[["class_lower"]], "~", freq_df[["class_upper"]])) + # x軸目盛
+                     labels = x_label_vec) + # x軸目盛
   labs(title = "Histogram", 
        subtitle = paste0("N=", length(data_x)), 
        x = "class value", y = "frequency")
@@ -279,7 +292,11 @@ ggplot() +
 　`class_lower, class_upper`列に対応する2列のマトリクスを`cbind()`で作成し、`apply()`で行ごとに中央値(階級値)を計算して、軸目盛ラベルとして使っています。\
 \
 
-　本では、最小値から最大値の範囲を5～8の小範囲(小区間)に区切るとありますが、階級(階級値)とヒストグラムの関係を見てみましょう。
+
+## ・階級とヒストグラムの関係
+
+　本では、最小値から最大値の範囲を5～8の小範囲(小区間)に区切るとあります。階級(階級値)とヒストグラムの関係を見てみましょう。\
+\
 
 <details><summary>作図コード(クリックで展開)</summary>
 
@@ -303,7 +320,7 @@ for(class_width in 1:class_width_max) {
   class_value_vec <- cbind(class_vec[-length(class_vec)], class_vec[-1]) |> 
     apply(1, median)
   
-  # 軸ラベルを作成
+  # 軸目盛ラベルを作成
   x_label_vec <- paste0(
     class_vec[-length(class_vec)], "~", class_vec[-1], 
     "\n(", class_value_vec, ")"
@@ -320,7 +337,7 @@ for(class_width in 1:class_width_max) {
          x = "class value", y = "frequency")
   
   # グラフを書き出し
-  file_name <- stringr::str_pad(class_width, width = nchar(class_width_max), side = "left", pad = 0)
+  file_name <- sprintf(paste0("%0", nchar(class_width_max), "d"), class_width)
   ggplot2::ggsave(
     filename = paste0(dir_path, "/", file_name, ".png"), plot = g, 
     width = 800, height = 600, units = "px", dpi = 100
@@ -413,7 +430,7 @@ freq_df
 ggplot() + 
   geom_bar(data = freq_df, mapping = aes(x = class_value, y = freq), 
            stat = "identity", width = class_width, fill = "#00A968") + # 棒グラフ
-  scale_x_continuous(breaks = freq_df[["class_value"]]) + # x軸
+  scale_x_continuous(breaks = freq_df[["class_value"]]) + # x軸目盛
   labs(title = "Histogram", 
        subtitle = paste0("N=", length(data_x)), 
        x = "class value", y = "frequency")
