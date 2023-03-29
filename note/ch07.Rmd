@@ -1,0 +1,690 @@
+---
+title: "『完全独習 統計学入門』"
+author: "@anemptyarchive\\thanks{\\url{https://www.anarchive-beta.com/}}"
+date: "`r format(Sys.time(), '%Y-%m-%d %H:%M:%S')`"
+output: 
+  html_document: 
+    toc: TRUE       # 目次
+    toc_depth: 4    # 目次の見出しレベル
+    toc_float: TRUE # 目次のスクロール追跡
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+----
+
+【編集履歴】
+
+- 2023.03.29：初稿完成
+
+-----
+
+
+# 第7講 身長、コイン投げなど最もよく見られる分布、正規分布
+
+　正規分布の性質を確認します。より詳しくは別シリーズを参照してください。\
+\
+
+　利用するパッケージを読み込みます。
+
+```{r, eval=FALSE}
+# 利用パッケージ
+library(tidyverse)
+```
+
+```{r, echo=FALSE}
+### 資料作成用:(チェック用)
+
+library(ggplot2)
+```
+
+　この記事では、基本的に`パッケージ名::関数名()`の記法を使うので、パッケージを読み込む必要はありません。ただし、作図コードがごちゃごちゃしないようにパッケージ名を省略しているため`ggplot2`を読み込む必要があります。\
+　また、ネイティブパイプ演算子`|>`を使っています。`magrittr`パッケージのパイプ演算子`%>%`に置き換えても処理できますが、その場合は`magrittr`も読み込む必要があります。\
+
+
+## 7-1 最もよく見かけるデータ分布
+
+　まずは、標準正規分布のグラフを作成します。\
+\
+
+　正規分布のパラメータを指定します。
+
+```{r}
+# パラメータを指定
+mu    <- 0
+sigma <- 1
+```
+
+　標準正規分布は、平均パラメータが$\mu = 0$、標準偏差パラメータが$\sigma = 1$の正規分布です。`mu, sigma`として値を指定します。\
+　値を変更すると、任意の(標準でない)正規分布のグラフを作成できます。\
+\
+
+
+### 棒グラフで可視化
+
+　正規分布の棒グラフを作成します。\
+\
+
+　区間ごとの確率を計算します。
+
+```{r}
+# 階級の幅を指定
+x_width <- 0.1
+
+# (離散値的な)確率変数の値を指定
+x_vec = seq(from = -5, to = 5.1, by = x_width)
+
+# 各値より大きい確率を計算
+prob_vec <- pnorm(q = x_vec, mean = mu, sd = sigma, lower.tail = FALSE)
+head(x_vec); head(prob_vec)
+```
+
+　この例では、0.1間隔の区間における確率を描画することにします。\
+
+　そこで、確率変数(x軸)の値を`0.1`間隔で作成して、各値より大きい値をとる確率$p(X > x)$を計算します。\
+　正規分布の累積確率($x$以下の値をとる確率)$p(X \leq x)$は`pnorm()`で計算できます。確率変数の引数`q`に0.1間隔の値`x_vec`、平均の引数`mean`に`0`、標準偏差の引数`sd`に`1`を指定します。`lower.tail`引数に`FALSE`を指定すると、第1引数に指定した値より大きい値をとる確率を返します。\
+
+　作図用のデータフレームを作成します。
+
+```{r}
+# 区間ごとの確率を計算
+prob_df <- tibble::tibble(
+  x = x_vec[-length(x_vec)] + 0.5*x_width, 
+  probability = prob_vec[-length(x_vec)] - prob_vec[-1]
+)
+prob_df
+```
+
+　階級の下限(バーの左端)が`x_vec`の値になるように、階級の幅`x_width`の半分を足した(各バーの中心を`x_width`の半分だけ右にズラした)値をx軸の値とします。\
+　階級の幅(バーの横幅)が`x_width`である区間ごとの確率$p(x_i \leq X < x_{i-1})$になるように、`prob_vec[i] - prob_vec[i-1]`を計算してy軸の値とします。\
+
+　パラメータをタイトルに表示する用の文字列を作成します。作図自体には不要な処理です。
+
+```{r}
+# タイトル用の文字列を作成
+param_label <- paste0(
+  "list(mu==", mu, ", sigma==", sigma, ")"
+)
+param_label
+```
+
+　`expression()`の記法に従い指定します。\
+
+　棒グラフとして、標準正規分布を作図します。
+
+```{r, fig.width=8, fig.height=6, dpi=100}
+# 正規分布を棒グラフで作図
+ggplot() + 
+  geom_bar(data = prob_df, mapping = aes(x = x, y = probability), 
+           stat = "identity", width = x_width, fill = "#00A968") + # 相対度数
+  labs(title = "standard normal distribution", 
+       subtitle = parse(text = param_label), 
+       x = "x", y = "probability")
+```
+
+　`geom_bar()`の`width`引数に`x_width`を指定して、各バーの横幅と階級のサイズをあわせます。\
+\
+
+
+### 折れ線グラフで可視化
+
+　続いて、正規分布の折れ線グラフを作成します。棒グラフの階級の幅を無限に小さくしたグラフに相当します。\
+\
+
+　確率密度を計算します。
+
+```{r}
+# (連続値的な)x軸の値を指定
+x_vec = seq(from = -5, to = 5, length.out = 501)
+
+# 確率密度を計算
+dens_df <- tibble::tibble(
+  x = x_vec, 
+  density = dnorm(x = x_vec, mean = mu, sd = sigma)
+)
+dens_df
+```
+
+　滑らかな曲線になるように、棒グラフのときよりも小さい間隔の確率変数(x軸)の値を作成して、(確率ではなく)確率密度を計算します。\
+
+　点の間隔は重要ではないので、要素数の引数`length.out`に点の数を指定して、数値ベクトルを作成します。\
+　正規分布の確率密度は`dnorm()`で計算できます。確率変数の引数`x`に`x_vec`、平均の引数`mean`に`0`、標準偏差の引数`sd`に`1`を指定します。\
+
+　折れ線グラフとして、標準正規分布を作図します。
+
+```{r, fig.width=8, fig.height=6, dpi=100}
+# 正規分布を折れ線グラフで作図
+ggplot() + 
+  geom_line(data = dens_df, mapping = aes(x = x, y = density), 
+            color = "#00A968", size = 1) + # 確率密度
+  labs(title = "standard normal distribution", 
+       subtitle = parse(text = param_label), 
+       x = "x", y = "density")
+```
+
+\ 
+
+
+### 標準偏差の可視化
+
+　ここまでで、(標準)正規分布をグラフ化できました。次に、標準偏差パラメータの影響をグラフで確認します。\
+\
+
+　平を中心に、標準偏差1つ分の範囲の確率密度を計算します。
+
+```{r}
+# 標準偏差1つ分の確率密度を計算
+sd_1_df <- tibble::tibble(
+  x = seq(from = mu-sigma, to = mu+sigma, length.out = 500), 
+  density = dnorm(x = x, mean = mu, sd = sigma)
+)
+sd_1_df
+```
+
+　確率変数(x軸)の範囲を$\mu - \sigma$から$\mu + \sigma$として、確率密度を計算します。\
+
+　同様に、標準偏差2つ分の範囲の確率密度を計算します。
+
+```{r}
+# 標準偏差2つ分の確率密度を計算
+sd_2_df <- tibble::tibble(
+  x = seq(from = mu-sigma*2, to = mu+sigma*2, length.out = 500), 
+  density = dnorm(x = x, mean = mu, sd = sigma)
+)
+sd_2_df
+```
+
+　$\mu - 2 \sigma$から$\mu + 2 \sigma$の範囲で確率密度を計算します。\
+
+　境界線(標準偏差の範囲)にラベルを表示する用のデータフレームを作成します。作図自体には不要な処理です。
+
+```{r}
+# ラベル用のデータフレームを作成
+sd_label_df <- tibble::tibble(
+  x = c(mu-sigma*2, mu-sigma, mu, mu+sigma, mu+sigma*2), 
+  y = 0, 
+  label = c("mu - 2*sigma", "mu - sigma", "mu", "mu + sigma", "mu + 2*sigma")
+)
+sd_label_df
+```
+
+　平均$\mu$を含めた5点のx軸の値と、対応する`expression()`記法の文字列を格納します。y軸の値は全て`0`とします。\
+
+　標準正規分布の折れ線グラフに、標準偏差の範囲を重ねたグラフを作成します。
+
+```{r, fig.width=8, fig.height=6, dpi=100}
+# 正規分布を折れ線グラフで作図
+ggplot() + 
+  geom_area(data = sd_1_df, mapping = aes(x = x, y = density), 
+            fill = "navy", alpha = 0.5) + # μ ± σ
+  geom_area(data = sd_2_df, mapping = aes(x = x, y = density), 
+            fill = "blue", alpha = 0.5) + # μ ± 2σ
+  geom_line(data = dens_df, mapping = aes(x = x, y = density), 
+            color = "#00A968", size = 1) + # 確率密度
+  geom_vline(xintercept = mu, color = "red", linetype = "dashed", size = 1) + # μ
+  geom_text(data = sd_label_df, mapping = aes(x = x, y = y, label = label), 
+            parse = TRUE, vjust = 1, size = 5) + 
+  labs(title = "standard normal distribution", 
+       subtitle = parse(text = param_label), 
+       x = "x", y = "density")
+```
+
+　標準偏差1つ分と2つ分の範囲をそれぞれ`geom_area()`で塗りつぶします。\
+\
+
+　続いて、塗りつぶした範囲が占める割合を確認します。\
+
+　標準偏差1つ分の範囲となる確率を計算します。
+
+```{r}
+# 標準偏差1個分の範囲の割合を計算
+prob_lower <- pnorm(q = mu-sigma, mean = mu, sd = sigma, lower.tail = TRUE)
+prob_upper <- pnorm(q = mu+sigma, mean = mu, sd = sigma, lower.tail = FALSE)
+prob       <- 1 - prob_lower - prob_upper
+prob; prob_lower; prob_upper
+```
+
+　棒グラフ(の各バー)のときと同様に、$p(\mu - \sigma < X < \mu + \sigma)$を計算します。\
+
+　同様に、標準偏差2つ分の範囲の割合を計算します。
+
+```{r}
+# 標準偏差2個分の範囲の割合を計算
+prob_lower <- pnorm(q = mu-sigma*2, mean = mu, sd = sigma, lower.tail = TRUE)
+prob_upper <- pnorm(q = mu+sigma*2, mean = mu, sd = sigma, lower.tail = FALSE)
+prob       <- 1 - prob_lower - prob_upper
+prob; prob_lower; prob_upper
+```
+
+　$p(\mu - 2 \sigma < X < \mu + 2 \sigma)$を計算します。\
+
+　標準偏差1つ分の範囲は約68%、2つ分の範囲は約95%なのを確認できます。\
+\
+
+
+## 7-2 一般の正規分布の眺め方
+
+　次は、(標準でない)正規分布のグラフを作成します。\
+\
+
+　正規分布のパラメータを指定します。
+
+```{r}
+# パラメータを指定
+mu    <- 4
+sigma <- 3
+```
+
+　平均パラメータ$\mu$と標準偏差パラメータ$\sigma > 0$を指定します。$\sigma$は0より大きい必要があります。\
+\
+
+
+### 折れ線グラフで可視化
+
+　任意のパラメータの正規分布と、標準偏差パラメータの影響をグラフで確認します。\
+\
+
+　確率密度を計算します。
+
+```{r}
+# 確率密度を計算
+dens_df <- tibble::tibble(
+  x = seq(from = mu-sigma*3, to = mu+sigma*3, length.out = 501), 
+  density = dnorm(x = x, mean = mu, sd = sigma)
+)
+dens_df
+```
+
+　「折れ線グラフで可視化」のときと同様にして、正規分布に従う確率密度を計算します。この例では、平均を中心に標準偏差3つ分を範囲とします。\
+
+　「標準偏差の可視化」のコードで、正規分布のグラフを作成します。(タイトル部分は変更しました。)
+
+```{r, fig.width=8, fig.height=6, dpi=100}
+### 資料作成用:(再掲)
+
+# 標準偏差1つ分の確率密度を計算
+sd_1_df <- tibble::tibble(
+  x = seq(from = mu-sigma, to = mu+sigma, length.out = 500), 
+  density = dnorm(x = x, mean = mu, sd = sigma)
+)
+
+# 標準偏差2つ分の確率密度を計算
+sd_2_df <- tibble::tibble(
+  x = seq(from = mu-sigma*2, to = mu+sigma*2, length.out = 500), 
+  density = dnorm(x = x, mean = mu, sd = sigma)
+)
+
+# ラベル用のデータフレームを作成
+sd_label_df <- tibble::tibble(
+  x = c(mu-sigma*2, mu-sigma, mu, mu+sigma, mu+sigma*2), 
+  y = 0, 
+  label = c("mu - 2*sigma", "mu - sigma", "mu", "mu + sigma", "mu + 2*sigma")
+)
+
+# タイトル用の文字列を作成
+param_label <- paste0(
+  "list(mu==", mu, ", sigma==", sigma, ")"
+)
+
+# 正規分布を折れ線グラフで作図
+ggplot() + 
+  geom_area(data = sd_1_df, mapping = aes(x = x, y = density), 
+            fill = "navy", alpha = 0.5) + # μ ± σ
+  geom_area(data = sd_2_df, mapping = aes(x = x, y = density), 
+            fill = "blue", alpha = 0.5) + # μ ± 2σ
+  geom_line(data = dens_df, mapping = aes(x = x, y = density), 
+            color = "#00A968", size = 1) + # 確率密度
+  geom_vline(xintercept = mu, color = "red", linetype = "dashed", size = 1) + # μ
+  geom_text(data = sd_label_df, mapping = aes(x = x, y = y, label = label), 
+            parse = TRUE, vjust = 1, size = 5) + 
+  labs(title = "normal distribution", 
+       subtitle = parse(text = param_label), 
+       x = "x", y = "density")
+```
+
+　塗りつぶし範囲の割合が変わらないことを先ほどのコードで確認できます。\
+\
+
+
+### データの加工
+
+　標準正規分布から生成したデータの標本平均と標本標準偏差を変更して、正規分布のグラフと比較します。\
+\
+
+　データ数を指定して、標準正規分布に従う乱数を生成します。
+
+```{r}
+# データ数を指定
+N <- 10000
+
+# 標準正規分布に従うデータを生成
+data_z <- rnorm(n = N, mean = 0, sd = 1)
+
+# 標本平均と標本標準偏差を計算
+mean_z <- mean(data_z)
+sd_z   <- sqrt(sum((data_z - mean_z)^2) / N)
+head(data_z); mean_z; sd_z
+```
+
+　正規分布の乱数は`rnorm()`で生成できます。データ数(サンプルサイズ)の引数`n`に生成するデータ数、平均の引数`mean`に`0`、標準偏差の引数`sd`に`1`を指定します。\
+
+　平均と標準偏差を用いて、データを加工します。
+
+```{r}
+# データを加工
+data_x <- data_z * sigma + mu
+
+# 標本平均と標本標準偏差を計算
+mean_x <- mean(data_x)
+sd_x   <- sqrt(sum((data_x - mean_x)^2) / N)
+head(data_z); mean_x; sd_x
+```
+
+　各データから平均を引き標準偏差で割ることで標準化(平均が0で標準偏差が1のデータに加工)しました(第4講)。この計算を式にすると、$z = \frac{x - \mu}{\sigma}$です。\
+　この式を$x$について整理すると、$x = \sigma z + \mu$になります。標準化データに標準偏差を掛けて平均を足すことで、平均が$\mu$で標準偏差が$\sigma$のデータに加工できます。\
+
+　加工したデータのヒストグラムと、計算した正規分布のグラフを重ねて描画します。
+
+```{r, fig.width=8, fig.height=6, dpi=100}
+# データを加工して格納
+data_df <- tibble::tibble(
+  x = data_z * sigma + mu
+)
+
+# タイトル用の文字列を作成
+data_label <- paste0(
+  "list(", 
+  "z[n] == sigma * x[n] + mu", 
+  ", x[n] %~% N(x ~'|'~ mu == 0, sigma == 1)", 
+  ")"
+)
+param_label <- paste0(
+  "list(", 
+  "mu==", mu, ", sigma==", sigma, 
+  ", bar(x)==", round(mean_x, digits = 2), ", S[x]==", round(sd_x, digits = 2), 
+  ")"
+)
+
+# 加工データのヒストグラムを作成
+ggplot() + 
+  geom_histogram(data = data_df, mapping = aes(x = x, y = ..count../N), 
+                 binwidth = 1, fill = "green") + # 相対度数
+  geom_line(data = dens_df, mapping = aes(x = x, y = density), 
+            color = "#00A968", size = 1) + # 確率密度
+  labs(title = parse(text = data_label), 
+       subtitle = parse(text = param_label), 
+       x = "x", y = "relative frequency")
+```
+
+　データ数が十分に大きいと、分布が一致しているのが分かります。\
+\
+
+
+## 7-3 身長のデータは正規分布している
+
+　今度は、身長データとコインの裏表結果が正規分布になっているのをグラフで確認します。\
+\
+
+
+### 身長データ
+
+　第1講で利用した身長のデータを使います。度数分布表の作成については「第1講」、度数分布表を用いた平均値・標準偏差の計算については「第2講」を参照してください。\
+\
+
+　図表1-1の身長データを読み込みます。
+
+```{r}
+# データを作成:(身長)
+data_x <- c(
+  151, 154, 158, 162, 
+  154, 152, 151, 167, 
+  160, 161, 155, 159, 
+  160, 160, 155, 153, 
+  163, 160, 165, 146, 
+  156, 153, 165, 156, 
+  158, 155, 154, 160, 
+  156, 163, 148, 151, 
+  154, 160, 169, 151, 
+  160, 159, 158, 157, 
+  154, 164, 146, 151, 
+  162, 158, 166, 156, 
+  156, 150, 161, 166, 
+  162, 155, 143, 159, 
+  157, 157, 156, 157, 
+  162, 161, 156, 156, 
+  162, 168, 149, 159, 
+  169, 162, 162, 156, 
+  150, 153, 159, 156, 
+  162, 154, 164, 161
+)
+length(data_x)
+```
+
+\ 
+
+　階級の上限と下限として用いる値を作成します。
+
+```{r}
+# 階級の幅を指定
+x_class_width <- 5
+
+# 階級用の値を作成
+x_class_vec <- seq(
+  from = floor(min(data_x) / 10) * 10, 
+  to = ceiling(max(data_x) / 10) * 10, 
+  by = x_class_width
+)
+x_class_vec
+```
+
+　階級の幅を`class_width`として、`class_width`間隔の数値ベクトルを作成します。\
+　最小値の1桁を`floor()`で切り捨てて、最大値の1桁を`ceiling()`で切り上げて使います(もっといいやり方があれば教えて下さい)。あるいは、`from, to`(第1・第2)引数に値を直接指定します。\
+
+　元データの標本平均と標本標準偏差を計算します。
+
+```{r}
+# 平均値と標準偏差を計算
+mean_x <- mean(data_x) 
+sd_x   <- sqrt(sum((data_x - mean_x)^2) / length(data_x))
+mean_x; sd_x
+```
+
+　N個のデータ$x_n$の標本平均を$\bar{x}$、標本標準偏差を$S_x$で表します。\
+
+　データと階級値を標準化します。
+
+```{r}
+# 平均値と標準偏差を指定
+mean_x <- 157.75
+sd_x   <- 5.4
+
+# データと階級用の値を標準化
+data_z      <- (data_x - mean_x) / sd_x
+z_class_vec <- (x_class_vec - mean_x) / sd_x
+head(data_z); z_class_vec
+```
+
+　本では、度数分布表から求めた平均と標準偏差を使っています。計算方法については「第2講」を参照してください。ここでは(面倒なので)、値を直接指定します。\
+　$z = \frac{x - \bar{x}}{S_x}$を計算して、データを標準化します。\
+
+　標準化したデータの標本平均と標本標準偏差を計算します。
+
+```{r}
+# 平均値と標本標準偏差を計算
+mean_z <- mean(data_z)
+sd_z   <- sqrt(sum((data_z - mean_z)^2) / length(data_z))
+head(data_z); mean_z; sd_z
+```
+
+　N個のデータ$z_n$の標本平均を$\bar{z}$、標本標準偏差を$S_z$で表します。\
+
+　標準化したデータを用いて度数分布表を作成します。
+
+```{r}
+# 度数分布表を作成:(階級が決まっている場合)
+freq_df <- tibble::tibble(
+  class_lower = z_class_vec[-length(z_class_vec)], # 階級の下限
+  class_upper = z_class_vec[-1] # 階級の上限
+) |> 
+  dplyr::group_by(class_lower, class_upper) |> 
+  dplyr::mutate(
+    class_value = median(c(class_lower, class_upper)), # 階級値
+    freq = sum((data_z >= class_lower) == (data_z < class_upper)) # 度数
+  ) |> 
+  dplyr::ungroup() |> 
+  dplyr::mutate(
+    relative_freq = freq / length(data_x), # 相対度数
+    cumulative_freq = cumsum(freq) # 累積度数
+  )
+freq_df
+```
+
+　「第1講」のときと同様にして、相対度数を計算します。\
+
+　標準正規分布を計算します。
+
+```{r}
+# 正規分布のパラメータを指定
+mu    <- 0
+sigma <- 1
+
+# 確率密度を計算
+dens_df <- tibble::tibble(
+  x =  seq(from = mu-sigma*3, to = mu+sigma*3, length.out = 501), 
+  density = dnorm(x = x, mean = mu, sd = sigma)
+)
+```
+
+　これまでと同様にして、処理します。\
+
+　標準化したデータのヒストグラムと標準正規分布の折れ線グラフを重ねて描画します。
+
+```{r}
+# 階級の幅を計算
+class_width <- freq_df[["class_upper"]][1] - freq_df[["class_lower"]][1]
+
+# タイトル用の文字列を作成
+param_label <- paste0(
+  "list(", 
+  "mu==", mu, ", sigma==", sigma, 
+  ", bar(z)==", round(mean_z, digits = 2), ", S[z]==", round(sd_z, digits = 2), 
+  ")"
+)
+
+# 標準化データの相対度数と標準正規分布の比較
+ggplot() + 
+  geom_bar(data = freq_df, mapping = aes(x = class_value, y = relative_freq), 
+           stat = "identity", width = class_width, fill = "green") + # 標準化データの相対度数
+  geom_point(data = freq_df, mapping = aes(x = class_value, y = relative_freq), 
+             color = "black", size = 4) + # 標準化データの相対度数
+  geom_line(data = dens_df, mapping = aes(x = x, y = density), 
+            color = "#00A968", size = 1) + # 標準正規分布の確率密度
+  labs(title = "standard normal distribution", 
+       subtitle = parse(text = param_label), 
+       x = "x", y = "relative frequency")
+```
+
+　標準正規分布と概ね一致しているのが分かります。\
+\
+
+
+### コインデータ
+
+　複数枚のコインを同時に投げたときの表の枚数の分布(二項分布)と正規分布を比較します。二項分布については別シリーズを参照してください。\
+\
+
+　二項分布のパラメータを設定します。
+
+```{r}
+# コインの枚数を指定
+N <- 18
+
+# 表の確率を指定
+phi <- 0.5
+```
+
+　試行回数$N$と成功確率$0 \leq \phi \leq 1$を指定します。$\phi$は0から1の値である必要があります。\
+
+　二項分布の平均と標準偏差を計算します。
+
+```{r}
+# 平均と標準偏差を計算
+mu    <- N * phi
+sigma <- sqrt(N) * phi
+mu; sigma
+```
+
+　期待値(平均)$\mathbb{E}[x] = N \phi$を正規分布の平均パラメータ$\mu$、$\mathbb{s}[x] = \sqrt{N} \phi$を標準偏差パラメータ$\sigma$とします。\
+
+　正規分布に従う確率密度を計算します。
+
+```{r}
+# 正規分布の確率密度を計算
+norm_df <- tibble::tibble(
+  x = seq(from = 0, to = N, length.out = 501), 
+  density = dnorm(x = x, mean = mu, sd = sigma)
+)
+norm_df
+```
+
+　二項分布の確率変数(N枚のコインを投げたときの表の枚数)は0以上N以下の値なので、`0`から`N`の範囲で確率密度を計算します。\
+
+　二項分布に従う確率を計算します。
+
+```{r}
+# 二項分布の確率を計算
+binom_df <- tibble::tibble(
+  x = 0:N, 
+  probability = dbinom(x = x, size = N, prob = phi)
+)
+binom_df
+```
+
+　二項分布の確率は`dbinom()`で計算できます。確率変数の引数`x`に`0`から`N`の整数、試行回数の引数`size`にコインの枚数`N`、出現確率の引数`prob`に表の確率`phi`を指定します。\
+
+　二項分布と正規分布のグラフを重ねて描画します。
+
+```{r, fig.width=8, fig.height=6}
+# ラベル用の文字列を作成
+dist_label <- paste0(
+  "list(", 
+  "Bin(x ~'|'~ N, phi), ", 
+  "N(x ~'|'~ mu==frac(N, 2), sigma==frac(sqrt(N), 2))", 
+  ")"
+)
+param_label <- paste0(
+  "list(", 
+  "N==", N, ", phi==", phi, 
+  ", mu==", mu, ", sigma==", round(sigma, digits = 2), 
+  ")"
+)
+
+# 二項分布と正規分布を作図
+ggplot() + 
+  geom_bar(data = binom_df, mapping = aes(x = x, y = probability), 
+           stat = "identity", fill = "green") + # 二項分布
+  geom_point(data = binom_df, mapping = aes(x = x, y = probability), 
+             size = 4) + # 二項分布
+  geom_line(data = norm_df, mapping = aes(x = x, y = density), 
+            color = "#00A968", size = 1) + # 正規分布
+  labs(title = "binomial distribution and normal distribution", 
+       subtitle = parse(text = param_label), 
+       x = "x", y = parse(text = dist_label))
+```
+
+　二項分布は離散値をとり、正規分布は連続値をとりますが、点と曲線が一致しているのが分かります。ただし、二項分布のパラメータを変更すると一致の度合いも変わります。\
+\
+
+　この講では、正規分布の性質を確認しました。次講では、を確認します。\
+\
+
+
+# 参考書籍
+
+- 小島寛之『完全独習 統計学入門』ダイヤモンド社,2006年.
+
+
+
+
